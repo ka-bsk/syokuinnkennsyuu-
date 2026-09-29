@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>緊急時対応研修 アンケート集計システム</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            background-color: #f1f5f9;
+        }
+        .tab-active {
+            border-bottom: 3px solid #2563eb;
+            color: #2563eb;
+            font-weight: 600;
+        }
+        /* Paper sheet look for transcription */
+        .paper-sheet {
+            background-color: #ffffff;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            border: 1px solid #e2e8f0;
+        }
+        /* Table radio styling */
+        .radio-cell input[type="radio"] {
+            width: 1.1rem;
+            height: 1.1rem;
+            cursor: pointer;
+            accent-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col">
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="p-2 bg-blue-600 text-white rounded-lg shadow">
+                        <i data-lucide="file-text" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg text-slate-900 leading-tight">緊急時対応研修 アンケート集計システム</h1>
+                        <p class="text-xs text-slate-500">紙アンケート転記・事前事後効果判定・自由記述分析</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <span id="header-transcribed-counter" class="hidden sm:inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-medium border border-blue-200">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5 mr-1"></i>
+                        集計数: <strong id="header-count" class="ml-1 font-bold">0</strong> 件
+                    </span>
+                    <button onclick="exportCSV()" class="px-3 py-1.5 text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 rounded-md transition flex items-center space-x-1">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>CSV出力</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-6 -mb-px text-sm">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-button py-3 px-1 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 tab-active flex items-center space-x-2">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                    <span>集計ダッシュボード</span>
+                </button>
+                <button onclick="switchTab('input')" id="tab-input" class="tab-button py-3 px-1 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 flex items-center space-x-2">
+                    <i data-lucide="edit-3" class="w-4 h-4 text-blue-600"></i>
+                    <span class="font-bold text-blue-600">アンケート入力（紙転記）</span>
+                    <span class="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">用紙再現UI</span>
+                </button>
+                <button onclick="switchTab('list')" id="tab-list" class="tab-button py-3 px-1 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 flex items-center space-x-2">
+                    <i data-lucide="database" class="w-4 h-4"></i>
+                    <span>回答データ一覧 (<span id="badge-count">0</span>件)</span>
+                </button>
+                <button onclick="switchTab('comments')" id="tab-comments" class="tab-button py-3 px-1 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700 flex items-center space-x-2">
+                    <i data-lucide="message-square" class="w-4 h-4"></i>
+                    <span>自由記述回答</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+
+        <!-- DASHBOARD SECTION -->
+        <section id="section-dashboard" class="space-y-6">
+            <!-- Global Filter Bar -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-2 text-slate-700 font-medium text-sm">
+                    <i data-lucide="filter" class="w-4 h-4 text-blue-600"></i>
+                    <span>集計対象の絞り込み:</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 text-sm">
+                    <!-- School Filter -->
+                    <div>
+                        <select id="filter-school" onchange="renderDashboard()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:ring-2 focus:ring-blue-500">
+                            <option value="ALL">所属校: 全校表示</option>
+                        </select>
+                    </div>
+                    <!-- Topic Filter -->
+                    <div>
+                        <select id="filter-topic" onchange="renderDashboard()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:ring-2 focus:ring-blue-500">
+                            <option value="ALL">研修内容: 全て表示</option>
+                            <option value="頭部打撲">頭部打撲</option>
+                            <option value="てんかん発作">てんかん発作</option>
+                            <option value="食物アレルギー">食物アレルギー</option>
+                            <option value="エピペン・アナフィラキシー">エピペン・アナフィラキシー</option>
+                            <option value="溺水">溺水</option>
+                            <option value="心肺蘇生法">心肺蘇生法</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">総回答件数</p>
+                        <h3 id="kpi-total-count" class="text-2xl font-bold text-slate-900 mt-1">0 人</h3>
+                        <p class="text-xs text-slate-500 mt-1">転記完了枚数</p>
+                    </div>
+                    <div class="p-3 bg-blue-50 rounded-lg text-blue-600">
+                        <i data-lucide="users" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">1. 知識・理解の深まり (Q1-3)</p>
+                        <h3 id="kpi-understanding" class="text-2xl font-bold text-emerald-600 mt-1">+0.00 点</h3>
+                        <p class="text-xs text-slate-500 mt-1">平均スコアの上昇幅</p>
+                    </div>
+                    <div class="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+                        <i data-lucide="book-open" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">2. 実践・意欲の向上 (Q4-6)</p>
+                        <h3 id="kpi-confidence" class="text-2xl font-bold text-indigo-600 mt-1">+0.00 点</h3>
+                        <p class="text-xs text-slate-500 mt-1">役割分担・行動意欲の上昇</p>
+                    </div>
+                    <div class="p-3 bg-indigo-50 rounded-lg text-indigo-600">
+                        <i data-lucide="shield-check" class="w-6 h-6"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">3. 不安感の解消 (Q7)</p>
+                        <h3 id="kpi-anxiety" class="text-2xl font-bold text-amber-600 mt-1">0.00 点</h3>
+                        <p class="text-xs text-slate-500 mt-1">不安スコアの変化（マイナスで解消）</p>
+                    </div>
+                    <div class="p-3 bg-amber-50 rounded-lg text-amber-600">
+                        <i data-lucide="heart-handshake" class="w-6 h-6"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Overview Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Category 1 -->
+                <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-5 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider bg-emerald-100 px-2 py-0.5 rounded">カテゴリ 1</span>
+                        <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 text-base">基本対応・判断の理解 (Q1〜Q3)</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">対応の流れ、緊急性判断、応援要請のタイミングに対する理解度変化</p>
+                    <div class="bg-white p-3 rounded-lg border border-emerald-100 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500">研修後 肯定率(④+③)</p>
+                            <p id="cat1-positive-rate" class="text-lg font-bold text-emerald-700">0.0%</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-500">平均スコア推移</p>
+                            <p id="cat1-score-trend" class="text-xs font-mono font-bold text-slate-700">0.00 → 0.00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category 2 -->
+                <div class="bg-indigo-50/60 border border-indigo-200 rounded-xl p-5 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-indigo-800 uppercase tracking-wider bg-indigo-100 px-2 py-0.5 rounded">カテゴリ 2</span>
+                        <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 text-base">実践・役割分担への自信 (Q4〜Q6)</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">職員同士の連携、マニュアル確認、いざという時の落ち着いた対応意欲</p>
+                    <div class="bg-white p-3 rounded-lg border border-indigo-100 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500">研修後 肯定率(④+③)</p>
+                            <p id="cat2-positive-rate" class="text-lg font-bold text-indigo-700">0.0%</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-500">平均スコア推移</p>
+                            <p id="cat2-score-trend" class="text-xs font-mono font-bold text-slate-700">0.00 → 0.00</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category 3 -->
+                <div class="bg-amber-50/60 border border-amber-200 rounded-xl p-5 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-amber-800 uppercase tracking-wider bg-amber-100 px-2 py-0.5 rounded">カテゴリ 3</span>
+                        <i data-lucide="alert-circle" class="w-5 h-5 text-amber-600"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-800 text-base">現場対応への不安感 (Q7)</h3>
+                    <p class="text-xs text-slate-600 leading-relaxed">研修内容に対する懸念・不安要素（数値が低いほど不安が解消された状態）</p>
+                    <div class="bg-white p-3 rounded-lg border border-amber-100 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500">不安を感じる割合(④+③)</p>
+                            <p id="cat3-anxiety-rate" class="text-lg font-bold text-amber-700">0.0%</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-500">平均不安スコア推移</p>
+                            <p id="cat3-score-trend" class="text-xs font-mono font-bold text-slate-700">0.00 → 0.00</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Question Breakdown Cards -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center border-b border-slate-200 pb-3 gap-2">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
+                            <i data-lucide="list-checks" class="w-5 h-5 text-blue-600"></i>
+                            <span>アンケート全質問（Q1〜Q7）別 4段階内訳分析</span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">研修前・研修後それぞれの回答分布（人数・％）を詳細表示</p>
+                    </div>
+                    <!-- 4 Level Color Legend -->
+                    <div class="flex flex-wrap items-center gap-2 text-[11px] font-medium bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                        <span class="flex items-center space-x-1"><span class="w-3 h-3 bg-indigo-600 rounded-sm inline-block"></span><span>④とてもそう思う</span></span>
+                        <span class="flex items-center space-x-1"><span class="w-3 h-3 bg-sky-500 rounded-sm inline-block"></span><span>③ややそう思う</span></span>
+                        <span class="flex items-center space-x-1"><span class="w-3 h-3 bg-amber-400 rounded-sm inline-block"></span><span>②あまりそう思わない</span></span>
+                        <span class="flex items-center space-x-1"><span class="w-3 h-3 bg-rose-500 rounded-sm inline-block"></span><span>①そう思わない</span></span>
+                    </div>
+                </div>
+
+                <div id="questions-detail-cards" class="grid grid-cols-1 gap-4">
+                    <!-- Dynamic Question Cards -->
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Bar Chart -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
+                            <i data-lucide="git-compare" class="w-5 h-5 text-blue-600"></i>
+                            <span>質問別 平均スコア比較（研修前 vs 研修後）</span>
+                        </h3>
+                    </div>
+                    <div class="relative h-80">
+                        <canvas id="chart-scores-compare"></canvas>
+                    </div>
+                </div>
+
+                <!-- Radar Chart -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
+                            <i data-lucide="compass" class="w-5 h-5 text-purple-600"></i>
+                            <span>研修効果の総合プロファイル</span>
+                        </h3>
+                    </div>
+                    <div class="relative h-80">
+                        <canvas id="chart-radar"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Free-Text Preview -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
+                        <i data-lucide="message-square" class="w-5 h-5 text-emerald-600"></i>
+                        <span>自由記述の最新回答ピックアップ</span>
+                    </h3>
+                    <button onclick="switchTab('comments')" class="text-xs text-blue-600 hover:underline flex items-center space-x-1">
+                        <span>全自由記述を見る</span>
+                        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="dashboard-recent-comments">
+                    <!-- JS generated -->
+                </div>
+            </div>
+        </section>
+
+        <!-- INPUT / TRANSCRIPTION SECTION (REPLICATING PHYSICAL PAPER FORM) -->
+        <section id="section-input" class="hidden space-y-6">
+            
+            <!-- Helper Bar for Batch Entry -->
+            <div class="bg-blue-900 text-white p-4 rounded-xl shadow flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <span class="bg-blue-600 p-2 rounded-lg text-white font-bold text-xs uppercase">転記モード</span>
+                    <div>
+                        <h2 class="text-sm font-bold">紙のアンケート用紙を見ながら1枚ずつ入力</h2>
+                        <p class="text-xs text-blue-200">画面上の用紙レイアウトは手元の回答用紙と同じ並びになっています。</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4 bg-blue-800 px-3 py-2 rounded-lg text-xs">
+                    <label class="flex items-center space-x-2 cursor-pointer select-none">
+                        <input type="checkbox" id="keep-header-sticky" class="rounded text-blue-500 w-4 h-4" checked>
+                        <span class="font-medium">📌 学校名・研修内容を次の1枚でも保持する（連続入力に便利）</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- PAPER REPLICA FORM CONTAINER -->
+            <div class="paper-sheet rounded-xl p-6 sm:p-10 max-w-4xl mx-auto text-slate-900 space-y-6">
+                
+                <!-- Form Header (Paper replica) -->
+                <div class="text-center border-b-2 border-slate-800 pb-4 space-y-2">
+                    <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+                        緊急時対応研修 事前・事後アンケート
+                    </h2>
+                    <p class="text-xs text-slate-600 max-w-2xl mx-auto leading-relaxed">
+                        本アンケートは、緊急時対応研修を通して、教職員の理解度や対応への自信、不安感がどのように変化したかを把握するために実施します。
+                    </p>
+                </div>
+
+                <form id="survey-form" onsubmit="handleFormSubmit(event)" class="space-y-6">
+                    
+                    <!-- School Name Section -->
+                    <div class="flex flex-wrap items-center gap-2 text-sm pt-2">
+                        <label for="input-school" class="font-bold text-slate-800 shrink-0">所属校名 :</label>
+                        <div class="flex-1 min-w-[200px] max-w-xs flex items-center border-b-2 border-slate-400 focus-within:border-blue-600 px-1 py-0.5">
+                            <input type="text" id="input-school" placeholder="（例: 〇〇第一小学校）" class="w-full bg-transparent focus:outline-none text-sm text-slate-800 font-medium">
+                            <span class="text-xs font-bold text-slate-700 ml-1">学校</span>
+                        </div>
+                    </div>
+
+                    <!-- Topics Checkboxes (Paper style) -->
+                    <div class="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
+                        <div class="font-bold text-slate-800">今回の研修内容（あてはまる項目にチェック） <span class="text-red-500">*</span></div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                            <label class="flex items-center space-x-2 bg-white px-2.5 py-1.5 rounded border border-slate-300 cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" name="input-topics" value="頭部打撲" class="rounded text-blue-600 w-4 h-4">
+                                <span class="text-xs text-slate-800 font-medium">頭部打撲</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white px-2.5 py-1.5 rounded border border-slate-300 cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" name="input-topics" value="てんかん発作" class="rounded text-blue-600 w-4 h-4">
+                                <span class="text-xs text-slate-800 font-medium">てんかん発作</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white px-2.5 py-1.5 rounded border border-slate-300 cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" name="input-topics" value="食物アレルギー" class="rounded text-blue-600 w-4 h-4">
+                                <span class="text-xs text-slate-800 font-medium">食物アレルギー</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white px-2.5 py-1.5 rounded border border-slate-300 cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" name="input-topics" value="エピペン・アナフィラキシー" class="rounded text-blue-600 w-4 h-4">
+                                <span class="text-xs text-slate-800 font-medium">エピペン・アナフィラキシー</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white px-2.5 py-1.5 rounded border border-slate-300 cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" name="input-topics" value="溺水" class="rounded text-blue-600 w-4 h-4">
+                                <span class="text-xs text-slate-800 font-medium">溺水</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white px-2.5 py-1.5 rounded border border-slate-300 cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" name="input-topics" value="心肺蘇生法" class="rounded text-blue-600 w-4 h-4">
+                                <span class="text-xs text-slate-800 font-medium">心肺蘇生法</span>
+                            </label>
+                        </div>
+                        <div class="flex items-center space-x-2 pt-1">
+                            <span class="text-xs font-semibold text-slate-700">その他:</span>
+                            <input type="text" id="input-topic-other" placeholder="具体的に記述" class="flex-1 bg-white border border-slate-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- SECTION 1: QUESTION TABLE (PAPER MATRIX REPLICATION) -->
+                    <div class="space-y-3 pt-2">
+                        <div class="border-b border-slate-300 pb-2 flex justify-between items-end">
+                            <div>
+                                <h3 class="font-bold text-sm text-slate-900">1. 下の項目について、研修前、研修後のあてはまるものにチェックしてください。</h3>
+                                <p class="text-[11px] text-slate-500 mt-0.5">評価基準: ④とてもそう思う ③ややそう思う ②あまりそう思わない ①そう思わない</p>
+                            </div>
+                        </div>
+
+                        <!-- Table Matrix -->
+                        <div class="overflow-x-auto border border-slate-400 rounded-lg shadow-sm">
+                            <table class="w-full text-xs text-left border-collapse bg-white">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-800 border-b border-slate-400 font-bold divide-x divide-slate-300">
+                                        <th class="p-2 text-center w-10">No</th>
+                                        <th class="p-2 min-w-[200px]">質問事項</th>
+                                        <th class="p-2 text-center bg-blue-50 text-blue-900 w-44">
+                                            研修前<br>
+                                            <span class="text-[10px] font-normal text-blue-700">④ ③ ② ①</span>
+                                        </th>
+                                        <th class="p-2 text-center bg-emerald-50 text-emerald-900 w-44">
+                                            研修後<br>
+                                            <span class="text-[10px] font-normal text-emerald-700">④ ③ ② ①</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="survey-matrix-tbody" class="divide-y divide-slate-300">
+                                    <!-- Dynamic rows generated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: FREE TEXT QUESTIONS -->
+                    <div class="space-y-4 pt-4 border-t border-slate-300">
+                        <h3 class="font-bold text-sm text-slate-900">2. 研修の後に答えてください。</h3>
+
+                        <!-- Text 1 -->
+                        <div class="space-y-1.5 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <label for="input-text1" class="block font-bold text-xs text-slate-800">
+                                (1) 今日の研修で分かったことや、心に残ったことをご記入ください。
+                            </label>
+                            <div class="flex flex-wrap gap-1 text-[11px] text-slate-500 pb-1">
+                                <span>よく使う語句を補完:</span>
+                                <button type="button" onclick="insertKeyword('input-text1', '初期対応の重要性')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">初期対応の重要性</button>
+                                <button type="button" onclick="insertKeyword('input-text1', '役割分担と声かけ')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">役割分担</button>
+                                <button type="button" onclick="insertKeyword('input-text1', 'エピペンの使用タイミング')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">エピペンタイミング</button>
+                                <button type="button" onclick="insertKeyword('input-text1', '119番通報の基準')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">119番通報</button>
+                            </div>
+                            <textarea id="input-text1" rows="2.5" placeholder="用紙の記述通りに入力してください" class="w-full bg-white border border-slate-300 rounded p-2 text-xs focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+
+                        <!-- Text 2 -->
+                        <div class="space-y-1.5 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <label for="input-text2" class="block font-bold text-xs text-slate-800">
+                                (2) 研修を受けて、まだ不安に感じることや、さらに確認したいことがありましたらご記入ください。
+                            </label>
+                            <div class="flex flex-wrap gap-1 text-[11px] text-slate-500 pb-1">
+                                <span>よく使う語句を補完:</span>
+                                <button type="button" onclick="insertKeyword('input-text2', '校内マニュアルの保管場所')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">マニュアル場所</button>
+                                <button type="button" onclick="insertKeyword('input-text2', '実際に現場に居合わせた時のパニック不安')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">実際のパニック</button>
+                                <button type="button" onclick="insertKeyword('input-text2', '定期的なロールプレイ訓練の必要性')" class="bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">定期ロールプレイ</button>
+                            </div>
+                            <textarea id="input-text2" rows="2.5" placeholder="用紙の記述通りに入力してください" class="w-full bg-white border border-slate-300 rounded p-2 text-xs focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="text-right text-xs text-slate-500 pt-1 border-t border-slate-200">
+                        以上で、アンケートは終了です。ご協力ありがとうございました。
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-wrap justify-between items-center gap-3 pt-4 border-t-2 border-slate-800">
+                        <button type="button" onclick="resetForm(true)" class="px-3 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-100">
+                            すべての入力をクリア
+                        </button>
+                        <div class="flex space-x-3">
+                            <button type="submit" onclick="window.submitAction = 'next'" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow flex items-center space-x-1.5 transition">
+                                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                <span>登録して次の1枚を入力</span>
+                            </button>
+                            <button type="submit" onclick="window.submitAction = 'dashboard'" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow flex items-center space-x-1.5 transition">
+                                <i data-lucide="check" class="w-4 h-4"></i>
+                                <span>登録して集計画面へ</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+        </section>
+
+        <!-- DATA LIST SECTION -->
+        <section id="section-list" class="hidden space-y-6">
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                    <h3 class="font-bold text-slate-800 text-base">登録済み回答データ一覧</h3>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="clearAllData()" class="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-md hover:bg-red-50">全データ消去</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 text-xs">
+                        <thead class="bg-slate-50 text-slate-600 font-medium">
+                            <tr>
+                                <th class="px-3 py-3 text-left">ID</th>
+                                <th class="px-3 py-3 text-left">所属校名</th>
+                                <th class="px-3 py-3 text-left">研修内容</th>
+                                <th class="px-2 py-3 text-center">Q1 (前/後)</th>
+                                <th class="px-2 py-3 text-center">Q2 (前/後)</th>
+                                <th class="px-2 py-3 text-center">Q3 (前/後)</th>
+                                <th class="px-2 py-3 text-center">Q4 (前/後)</th>
+                                <th class="px-2 py-3 text-center">Q5 (前/後)</th>
+                                <th class="px-2 py-3 text-center">Q6 (前/後)</th>
+                                <th class="px-2 py-3 text-center">Q7 不安(前/後)</th>
+                                <th class="px-3 py-3 text-center">自由記述</th>
+                                <th class="px-3 py-3 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-data-list" class="divide-y divide-slate-200 text-slate-700">
+                            <!-- Rows generated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMMENTS SECTION -->
+        <section id="section-comments" class="hidden space-y-6">
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-800">自由記述回答の一覧・検索分析</h2>
+                    <p class="text-xs text-slate-500">研修後の(1)分かったこと・(2)不安や質問事項のテキスト一覧です。</p>
+                </div>
+                <div class="w-full sm:w-80">
+                    <input type="text" id="search-comments" onkeyup="renderComments()" placeholder="キーワードで検索 (例: エピペン, マニュアル, 役割)..." class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Text 1 -->
+                <div class="space-y-4">
+                    <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex items-center justify-between text-emerald-800">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="lightbulb" class="w-5 h-5 text-emerald-600"></i>
+                            <h3 class="font-bold text-sm">(1) 今日の研修で分かったこと・心に残ったこと</h3>
+                        </div>
+                        <span id="text1-count-badge" class="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">0件</span>
+                    </div>
+                    <div id="comments-list-1" class="space-y-3">
+                        <!-- Cards -->
+                    </div>
+                </div>
+
+                <!-- Text 2 -->
+                <div class="space-y-4">
+                    <div class="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center justify-between text-amber-800">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="help-circle" class="w-5 h-5 text-amber-600"></i>
+                            <h3 class="font-bold text-sm">(2) まだ不安に感じること・さらに確認したいこと</h3>
+                        </div>
+                        <span id="text2-count-badge" class="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">0件</span>
+                    </div>
+                    <div id="comments-list-2" class="space-y-3">
+                        <!-- Cards -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Survey Questions definition matching the physical paper form
+        const QUESTIONS = [
+            { id: 1, category: 1, text: "今回の研修内容について、基本的な対応の流れが分かる。" },
+            { id: 2, category: 1, text: "緊急性を判断するポイントが分かる。" },
+            { id: 3, category: 1, text: "すぐに応援を呼ぶ必要がある場面を判断できる。" },
+            { id: 4, category: 2, text: "周囲の職員と役割分担して対応できると思う。" },
+            { id: 5, category: 2, text: "校内の対応マニュアルや手順書等を確認しながら対応できると思う。" },
+            { id: 6, category: 2, text: "実際に同じような場面が起きた時、落ち着いて対応しようと思う。" },
+            { id: 7, category: 3, text: "今回の研修内容について、不安がある。（※不安項目）", isAnxiety: true }
+        ];
+
+        // Global State
+        let responses = [];
+        let scoresCompareChart = null;
+        let radarChart = null;
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            buildMatrixTable();
+            
+            // Load saved responses from LocalStorage
+            const savedData = localStorage.getItem('emergency_training_surveys_v3');
+            if (savedData) {
+                try {
+                    responses = JSON.parse(savedData);
+                } catch(e) {
+                    responses = [];
+                }
+            }
+
+            updateSchoolFilterOptions();
+            updateAllViews();
+        });
+
+        // Build the paper replica table matrix
+        function buildMatrixTable() {
+            const tbody = document.getElementById('survey-matrix-tbody');
+            tbody.innerHTML = QUESTIONS.map((q) => `
+                <tr class="hover:bg-slate-50 transition border-b border-slate-300">
+                    <td class="p-2 text-center font-bold text-slate-700 bg-slate-50">${q.id}</td>
+                    <td class="p-2 text-xs font-medium text-slate-800 leading-snug">
+                        ${q.text}
+                    </td>
+                    <!-- Pre Radio Buttons -->
+                    <td class="p-2 bg-blue-50/40 text-center">
+                        <div class="flex justify-center items-center space-x-2.5 radio-cell">
+                            <label class="cursor-pointer" title="④とてもそう思う">
+                                <input type="radio" name="q${q.id}_pre" value="4" required>
+                            </label>
+                            <label class="cursor-pointer" title="③ややそう思う">
+                                <input type="radio" name="q${q.id}_pre" value="3">
+                            </label>
+                            <label class="cursor-pointer" title="②あまりそう思わない">
+                                <input type="radio" name="q${q.id}_pre" value="2">
+                            </label>
+                            <label class="cursor-pointer" title="①そう思わない">
+                                <input type="radio" name="q${q.id}_pre" value="1">
+                            </label>
+                        </div>
+                    </td>
+                    <!-- Post Radio Buttons -->
+                    <td class="p-2 bg-emerald-50/40 text-center">
+                        <div class="flex justify-center items-center space-x-2.5 radio-cell">
+                            <label class="cursor-pointer" title="④とてもそう思う">
+                                <input type="radio" name="q${q.id}_post" value="4" required>
+                            </label>
+                            <label class="cursor-pointer" title="③ややそう思う">
+                                <input type="radio" name="q${q.id}_post" value="3">
+                            </label>
+                            <label class="cursor-pointer" title="②あまりそう思わない">
+                                <input type="radio" name="q${q.id}_post" value="2">
+                            </label>
+                            <label class="cursor-pointer" title="①そう思わない">
+                                <input type="radio" name="q${q.id}_post" value="1">
+                            </label>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Tab Switching
+        function switchTab(tabName) {
+            document.querySelectorAll('section[id^="section-"]').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('tab-active'));
+
+            document.getElementById(`section-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabName}`).classList.add('tab-active');
+
+            if (tabName === 'dashboard') {
+                renderDashboard();
+            } else if (tabName === 'list') {
+                renderDataList();
+            } else if (tabName === 'comments') {
+                renderComments();
+            }
+        }
+
+        // Insert keyword helper into textarea
+        function insertKeyword(elementId, text) {
+            const textarea = document.getElementById(elementId);
+            if (!textarea) return;
+            if (textarea.value.length > 0 && !textarea.value.endsWith(' ') && !textarea.value.endsWith('\n')) {
+                textarea.value += '、';
+            }
+            textarea.value += text;
+            textarea.focus();
+        }
+
+        // Form Submission
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const schoolName = document.getElementById('input-school').value.trim();
+
+            const topicCheckboxes = document.querySelectorAll('input[name="input-topics"]:checked');
+            let topics = Array.from(topicCheckboxes).map(c => c.value);
+            const otherTopic = document.getElementById('input-topic-other').value.trim();
+            if (otherTopic) topics.push(`その他(${otherTopic})`);
+
+            if (topics.length === 0) {
+                alert('今回の研修内容を少なくとも1つ選択してください。');
+                return;
+            }
+
+            const qPre = {};
+            const qPost = {};
+
+            QUESTIONS.forEach(q => {
+                const preVal = document.querySelector(`input[name="q${q.id}_pre"]:checked`)?.value;
+                const postVal = document.querySelector(`input[name="q${q.id}_post"]:checked`)?.value;
+                qPre[q.id] = parseInt(preVal || '0');
+                qPost[q.id] = parseInt(postVal || '0');
+            });
+
+            const newItem = {
+                id: 'R-' + Date.now().toString().slice(-5),
+                school: schoolName || '未記入',
+                topics: topics,
+                qPre: qPre,
+                qPost: qPost,
+                text1: document.getElementById('input-text1').value.trim(),
+                text2: document.getElementById('input-text2').value.trim(),
+                timestamp: new Date().toLocaleDateString('ja-JP')
+            };
+
+            responses.push(newItem);
+            saveData();
+            updateSchoolFilterOptions();
+
+            const keepSticky = document.getElementById('keep-header-sticky').checked;
+
+            if (window.submitAction === 'next') {
+                resetForm(!keepSticky); // Keep header if sticky checked
+                showToast('回答用紙データを登録しました。次の1枚を入力してください。');
+            } else {
+                resetForm(false);
+                switchTab('dashboard');
+            }
+        }
+
+        function resetForm(clearHeader = true) {
+            if (clearHeader) {
+                document.getElementById('input-school').value = '';
+                document.querySelectorAll('input[name="input-topics"]').forEach(c => c.checked = false);
+                document.getElementById('input-topic-other').value = '';
+            }
+            // Clear Radio Buttons
+            document.querySelectorAll('#survey-matrix-tbody input[type="radio"]').forEach(r => r.checked = false);
+            // Clear Free Text
+            document.getElementById('input-text1').value = '';
+            document.getElementById('input-text2').value = '';
+        }
+
+        // Save Data to LocalStorage
+        function saveData() {
+            localStorage.setItem('emergency_training_surveys_v3', JSON.stringify(responses));
+            updateAllViews();
+        }
+
+        function updateAllViews() {
+            document.getElementById('badge-count').innerText = responses.length;
+            document.getElementById('header-count').innerText = responses.length;
+            renderDashboard();
+        }
+
+        function updateSchoolFilterOptions() {
+            const select = document.getElementById('filter-school');
+            const currentVal = select.value;
+
+            // Extract unique schools
+            const schools = [...new Set(responses.map(r => r.school).filter(s => s && s !== '未記入'))];
+            
+            let html = `<option value="ALL">所属校: 全校表示</option>`;
+            schools.forEach(s => {
+                html += `<option value="${s}">${s}</option>`;
+            });
+            if (responses.some(r => r.school === '未記入')) {
+                html += `<option value="未記入">所属校: 未記入のみ</option>`;
+            }
+
+            select.innerHTML = html;
+            select.value = currentVal || 'ALL';
+        }
+
+        function getFilteredResponses() {
+            const schoolFilter = document.getElementById('filter-school').value;
+            const topicFilter = document.getElementById('filter-topic').value;
+
+            return responses.filter(r => {
+                const matchSchool = (schoolFilter === 'ALL') || (r.school === schoolFilter);
+                const matchTopic = (topicFilter === 'ALL') || r.topics.some(t => t.includes(topicFilter));
+                return matchSchool && matchTopic;
+            });
+        }
+
+        function renderDashboard() {
+            const filtered = getFilteredResponses();
+            document.getElementById('kpi-total-count').innerText = `${filtered.length} 人`;
+
+            if (filtered.length === 0) {
+                document.getElementById('kpi-understanding').innerText = '+0.00 点';
+                document.getElementById('kpi-confidence').innerText = '+0.00 点';
+                document.getElementById('kpi-anxiety').innerText = '0.00 点';
+
+                document.getElementById('cat1-positive-rate').innerText = '0.0%';
+                document.getElementById('cat1-score-trend').innerText = '0.00 → 0.00';
+                document.getElementById('cat2-positive-rate').innerText = '0.0%';
+                document.getElementById('cat2-score-trend').innerText = '0.00 → 0.00';
+                document.getElementById('cat3-anxiety-rate').innerText = '0.0%';
+                document.getElementById('cat3-score-trend').innerText = '0.00 → 0.00';
+
+                renderQuestionCards([], {}, {});
+                renderCharts({}, {});
+                renderDashboardComments([]);
+                return;
+            }
+
+            // Averages
+            const preAverages = {};
+            const postAverages = {};
+
+            QUESTIONS.forEach(q => {
+                const sumPre = filtered.reduce((acc, r) => acc + (r.qPre[q.id] || 0), 0);
+                const sumPost = filtered.reduce((acc, r) => acc + (r.qPost[q.id] || 0), 0);
+                preAverages[q.id] = sumPre / filtered.length;
+                postAverages[q.id] = sumPost / filtered.length;
+            });
+
+            // Cat 1 (Q1-3)
+            const cat1Pre = (preAverages[1] + preAverages[2] + preAverages[3]) / 3;
+            const cat1Post = (postAverages[1] + postAverages[2] + postAverages[3]) / 3;
+            const undDiff = cat1Post - cat1Pre;
+
+            // Cat 2 (Q4-6)
+            const cat2Pre = (preAverages[4] + preAverages[5] + preAverages[6]) / 3;
+            const cat2Post = (postAverages[4] + postAverages[5] + postAverages[6]) / 3;
+            const confDiff = cat2Post - cat2Pre;
+
+            // Cat 3 (Q7 Anxiety)
+            const anxietyDiff = postAverages[7] - preAverages[7];
+
+            document.getElementById('kpi-understanding').innerText = `${undDiff >= 0 ? '+' : ''}${undDiff.toFixed(2)} 点`;
+            document.getElementById('kpi-confidence').innerText = `${confDiff >= 0 ? '+' : ''}${confDiff.toFixed(2)} 点`;
+            document.getElementById('kpi-anxiety').innerText = `${anxietyDiff >= 0 ? '+' : ''}${anxietyDiff.toFixed(2)} 点`;
+
+            // Category Overview
+            const cat1PosCount = filtered.filter(r => (r.qPost[1] >= 3 && r.qPost[2] >= 3 && r.qPost[3] >= 3)).length;
+            document.getElementById('cat1-positive-rate').innerText = `${((cat1PosCount / filtered.length) * 100).toFixed(1)}%`;
+            document.getElementById('cat1-score-trend').innerText = `${cat1Pre.toFixed(2)} → ${cat1Post.toFixed(2)}`;
+
+            const cat2PosCount = filtered.filter(r => (r.qPost[4] >= 3 && r.qPost[5] >= 3 && r.qPost[6] >= 3)).length;
+            document.getElementById('cat2-positive-rate').innerText = `${((cat2PosCount / filtered.length) * 100).toFixed(1)}%`;
+            document.getElementById('cat2-score-trend').innerText = `${cat2Pre.toFixed(2)} → ${cat2Post.toFixed(2)}`;
+
+            const cat3AnxCount = filtered.filter(r => r.qPost[7] >= 3).length;
+            document.getElementById('cat3-anxiety-rate').innerText = `${((cat3AnxCount / filtered.length) * 100).toFixed(1)}%`;
+            document.getElementById('cat3-score-trend').innerText = `${preAverages[7].toFixed(2)} → ${postAverages[7].toFixed(2)}`;
+
+            renderQuestionCards(filtered, preAverages, postAverages);
+            renderCharts(preAverages, postAverages);
+            renderDashboardComments(filtered);
+        }
+
+        function renderQuestionCards(filtered, preAvg, postAvg) {
+            const container = document.getElementById('questions-detail-cards');
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-slate-400 text-xs">該当する回答データがありません。</div>`;
+                return;
+            }
+
+            const total = filtered.length;
+
+            container.innerHTML = QUESTIONS.map(q => {
+                const pre = preAvg[q.id] || 0;
+                const post = postAvg[q.id] || 0;
+                const diff = post - pre;
+
+                // Counts for pre & post 4 choices
+                const preCounts = { 4: 0, 3: 0, 2: 0, 1: 0 };
+                const postCounts = { 4: 0, 3: 0, 2: 0, 1: 0 };
+
+                filtered.forEach(r => {
+                    if (r.qPre[q.id]) preCounts[r.qPre[q.id]]++;
+                    if (r.qPost[q.id]) postCounts[r.qPost[q.id]]++;
+                });
+
+                const getPct = (cnt) => ((cnt / total) * 100).toFixed(1);
+
+                const isAnxiety = q.isAnxiety;
+                const diffBadgeClass = isAnxiety 
+                    ? (diff <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800')
+                    : (diff >= 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800');
+
+                const diffText = isAnxiety
+                    ? (diff < 0 ? `不安 ${Math.abs(diff).toFixed(2)}pt 減少` : diff > 0 ? `不安 +${diff.toFixed(2)}pt 増加` : '変化なし')
+                    : (diff >= 0 ? `+${diff.toFixed(2)}pt 向上` : `${diff.toFixed(2)}pt`);
+
+                return `
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4 shadow-sm">
+                        <!-- Card Title & Summary -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                            <div class="flex items-center space-x-2">
+                                <span class="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">Q${q.id}</span>
+                                <h4 class="font-bold text-slate-800 text-xs sm:text-sm">${q.text}</h4>
+                            </div>
+                            <div class="flex items-center space-x-3 text-xs">
+                                <span class="font-mono text-slate-600">平均: ${pre.toFixed(2)} → <strong class="text-blue-700 font-bold">${post.toFixed(2)}</strong></span>
+                                <span class="text-xs font-bold px-2.5 py-0.5 rounded-full ${diffBadgeClass}">
+                                    ${diffText}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 4-Level Breakdown Comparison -->
+                        <div class="space-y-4 text-xs">
+                            <!-- PRE BREAKDOWN -->
+                            <div class="space-y-1.5">
+                                <div class="flex justify-between items-center text-slate-700 font-semibold">
+                                    <span class="text-slate-800">【研修前】 回答内訳分布</span>
+                                    <span class="text-slate-500 font-mono font-normal">平均: ${pre.toFixed(2)} / 4.0 点</span>
+                                </div>
+                                <!-- Stacked Distribution Bar -->
+                                <div class="w-full bg-slate-200 rounded-lg h-4 flex overflow-hidden shadow-inner">
+                                    <div class="bg-indigo-600 h-full text-[10px] text-white flex items-center justify-center font-bold transition-all" style="width: ${getPct(preCounts[4])}%" title="④とてもそう思う: ${preCounts[4]}人 (${getPct(preCounts[4])}%)">${preCounts[4] > 0 && getPct(preCounts[4]) > 6 ? preCounts[4] + '人' : ''}</div>
+                                    <div class="bg-sky-500 h-full text-[10px] text-white flex items-center justify-center font-bold transition-all" style="width: ${getPct(preCounts[3])}%" title="③ややそう思う: ${preCounts[3]}人 (${getPct(preCounts[3])}%)">${preCounts[3] > 0 && getPct(preCounts[3]) > 6 ? preCounts[3] + '人' : ''}</div>
+                                    <div class="bg-amber-400 h-full text-[10px] text-slate-900 flex items-center justify-center font-bold transition-all" style="width: ${getPct(preCounts[2])}%" title="②あまりそう思わない: ${preCounts[2]}人 (${getPct(preCounts[2])}%)">${preCounts[2] > 0 && getPct(preCounts[2]) > 6 ? preCounts[2] + '人' : ''}</div>
+                                    <div class="bg-rose-500 h-full text-[10px] text-white flex items-center justify-center font-bold transition-all" style="width: ${getPct(preCounts[1])}%" title="①そう思わない: ${preCounts[1]}人 (${getPct(preCounts[1])}%)">${preCounts[1] > 0 && getPct(preCounts[1]) > 6 ? preCounts[1] + '人' : ''}</div>
+                                </div>
+                                <!-- Detail Pill Numbers -->
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5 text-[11px]">
+                                    <div class="bg-indigo-50/70 border border-indigo-200 text-indigo-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-indigo-800 font-medium">④とても:</span>
+                                        <strong class="font-bold">${preCounts[4]}人 <span class="text-slate-500 font-normal">(${getPct(preCounts[4])}%)</span></strong>
+                                    </div>
+                                    <div class="bg-sky-50/70 border border-sky-200 text-sky-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-sky-800 font-medium">③やや:</span>
+                                        <strong class="font-bold">${preCounts[3]}人 <span class="text-slate-500 font-normal">(${getPct(preCounts[3])}%)</span></strong>
+                                    </div>
+                                    <div class="bg-amber-50/70 border border-amber-200 text-amber-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-amber-800 font-medium">②あまり:</span>
+                                        <strong class="font-bold">${preCounts[2]}人 <span class="text-slate-500 font-normal">(${getPct(preCounts[2])}%)</span></strong>
+                                    </div>
+                                    <div class="bg-rose-50/70 border border-rose-200 text-rose-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-rose-800 font-medium">①そう思わない:</span>
+                                        <strong class="font-bold">${preCounts[1]}人 <span class="text-slate-500 font-normal">(${getPct(preCounts[1])}%)</span></strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- POST BREAKDOWN -->
+                            <div class="space-y-1.5 pt-1">
+                                <div class="flex justify-between items-center text-blue-900 font-semibold">
+                                    <span class="text-blue-900">【研修後】 回答内訳分布</span>
+                                    <span class="text-blue-700 font-mono font-bold">平均: ${post.toFixed(2)} / 4.0 点</span>
+                                </div>
+                                <!-- Stacked Distribution Bar -->
+                                <div class="w-full bg-slate-200 rounded-lg h-4 flex overflow-hidden shadow-inner">
+                                    <div class="bg-indigo-600 h-full text-[10px] text-white flex items-center justify-center font-bold transition-all" style="width: ${getPct(postCounts[4])}%" title="④とてもそう思う: ${postCounts[4]}人 (${getPct(postCounts[4])}%)">${postCounts[4] > 0 && getPct(postCounts[4]) > 6 ? postCounts[4] + '人' : ''}</div>
+                                    <div class="bg-sky-500 h-full text-[10px] text-white flex items-center justify-center font-bold transition-all" style="width: ${getPct(postCounts[3])}%" title="③ややそう思う: ${postCounts[3]}人 (${getPct(postCounts[3])}%)">${postCounts[3] > 0 && getPct(postCounts[3]) > 6 ? postCounts[3] + '人' : ''}</div>
+                                    <div class="bg-amber-400 h-full text-[10px] text-slate-900 flex items-center justify-center font-bold transition-all" style="width: ${getPct(postCounts[2])}%" title="②あまりそう思わない: ${postCounts[2]}人 (${getPct(postCounts[2])}%)">${postCounts[2] > 0 && getPct(postCounts[2]) > 6 ? postCounts[2] + '人' : ''}</div>
+                                    <div class="bg-rose-500 h-full text-[10px] text-white flex items-center justify-center font-bold transition-all" style="width: ${getPct(postCounts[1])}%" title="①そう思わない: ${postCounts[1]}人 (${getPct(postCounts[1])}%)">${postCounts[1] > 0 && getPct(postCounts[1]) > 6 ? postCounts[1] + '人' : ''}</div>
+                                </div>
+                                <!-- Detail Pill Numbers -->
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5 text-[11px]">
+                                    <div class="bg-indigo-50 border border-indigo-200 text-indigo-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-indigo-800 font-medium">④とても:</span>
+                                        <strong class="font-bold">${postCounts[4]}人 <span class="text-slate-500 font-normal">(${getPct(postCounts[4])}%)</span></strong>
+                                    </div>
+                                    <div class="bg-sky-50 border border-sky-200 text-sky-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-sky-800 font-medium">③やや:</span>
+                                        <strong class="font-bold">${postCounts[3]}人 <span class="text-slate-500 font-normal">(${getPct(postCounts[3])}%)</span></strong>
+                                    </div>
+                                    <div class="bg-amber-50 border border-amber-200 text-amber-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-amber-800 font-medium">②あまり:</span>
+                                        <strong class="font-bold">${postCounts[2]}人 <span class="text-slate-500 font-normal">(${getPct(postCounts[2])}%)</span></strong>
+                                    </div>
+                                    <div class="bg-rose-50 border border-rose-200 text-rose-950 px-2 py-1 rounded flex justify-between items-center">
+                                        <span class="text-rose-800 font-medium">①そう思わない:</span>
+                                        <strong class="font-bold">${postCounts[1]}人 <span class="text-slate-500 font-normal">(${getPct(postCounts[1])}%)</span></strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderCharts(preAvg, postAvg) {
+            const labels = QUESTIONS.map(q => `Q${q.id}`);
+
+            const preData = QUESTIONS.map(q => preAvg[q.id] || 0);
+            const postData = QUESTIONS.map(q => postAvg[q.id] || 0);
+
+            // Bar Chart
+            const ctxBar = document.getElementById('chart-scores-compare').getContext('2d');
+            if (scoresCompareChart) scoresCompareChart.destroy();
+
+            scoresCompareChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '研修前 (平均)',
+                            data: preData,
+                            backgroundColor: 'rgba(148, 163, 184, 0.7)',
+                            borderColor: 'rgba(148, 163, 184, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        },
+                        {
+                            label: '研修後 (平均)',
+                            data: postData,
+                            backgroundColor: 'rgba(37, 99, 235, 0.85)',
+                            borderColor: 'rgba(37, 99, 235, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            min: 1,
+                            max: 4,
+                            ticks: { stepSize: 1 }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' }
+                    }
+                }
+            });
+
+            // Radar Chart
+            const ctxRadar = document.getElementById('chart-radar').getContext('2d');
+            if (radarChart) radarChart.destroy();
+
+            const radarLabels = [
+                'Q1.基本流れ',
+                'Q2.緊急性判断',
+                'Q3.応援要請',
+                'Q4.役割分担',
+                'Q5.マニュアル',
+                'Q6.落ち着いた対応',
+                'Q7.不安感(低=良好)'
+            ];
+
+            radarChart = new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: radarLabels,
+                    datasets: [
+                        {
+                            label: '研修前',
+                            data: preData,
+                            backgroundColor: 'rgba(148, 163, 184, 0.2)',
+                            borderColor: 'rgba(148, 163, 184, 1)',
+                            pointBackgroundColor: 'rgba(148, 163, 184, 1)'
+                        },
+                        {
+                            label: '研修後',
+                            data: postData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.25)',
+                            borderColor: 'rgba(16, 185, 129, 1)',
+                            pointBackgroundColor: 'rgba(16, 185, 129, 1)'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            min: 1,
+                            max: 4,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderDashboardComments(filtered) {
+            const container = document.getElementById('dashboard-recent-comments');
+            const withText1 = filtered.filter(r => r.text1);
+            const withText2 = filtered.filter(r => r.text2);
+
+            if (withText1.length === 0 && withText2.length === 0) {
+                container.innerHTML = `<p class="col-span-2 text-center text-xs text-slate-400 py-4">登録された自由記述はありません。</p>`;
+                return;
+            }
+
+            const latest1 = withText1[withText1.length - 1];
+            const latest2 = withText2[withText2.length - 1];
+
+            container.innerHTML = `
+                <div class="p-3 bg-emerald-50/50 border border-emerald-200 rounded-lg space-y-1.5">
+                    <div class="flex justify-between items-center text-[11px]">
+                        <span class="font-bold text-emerald-800">(1) 分かったことの最新回答</span>
+                        <span class="text-slate-500 font-medium">${latest1 ? `${latest1.school} (${latest1.topics.join(', ')})` : ''}</span>
+                    </div>
+                    <p class="text-xs text-slate-800 leading-relaxed">${latest1 ? escapeHtml(latest1.text1) : '回答なし'}</p>
+                </div>
+                <div class="p-3 bg-amber-50/50 border border-amber-200 rounded-lg space-y-1.5">
+                    <div class="flex justify-between items-center text-[11px]">
+                        <span class="font-bold text-amber-800">(2) 不安・課題の最新回答</span>
+                        <span class="text-slate-500 font-medium">${latest2 ? `${latest2.school} (${latest2.topics.join(', ')})` : ''}</span>
+                    </div>
+                    <p class="text-xs text-slate-800 leading-relaxed">${latest2 ? escapeHtml(latest2.text2) : '回答なし'}</p>
+                </div>
+            `;
+        }
+
+        // Render Data List Table
+        function renderDataList() {
+            const tbody = document.getElementById('table-data-list');
+            if (responses.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="12" class="text-center py-6 text-slate-400">登録されたデータがありません</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = responses.map((r, index) => {
+                const hasText = (r.text1 || r.text2) ? 'あり' : 'なし';
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-3 py-2.5 font-mono text-slate-500">${r.id}</td>
+                        <td class="px-3 py-2.5 font-semibold text-slate-800">${escapeHtml(r.school)}</td>
+                        <td class="px-3 py-2.5 text-slate-700 font-medium">${r.topics.join(', ')}</td>
+                        ${QUESTIONS.map(q => `
+                            <td class="px-2 py-2.5 text-center font-mono">
+                                <span class="text-slate-400">${r.qPre[q.id]}</span>
+                                <span class="text-slate-300">/</span>
+                                <span class="font-bold text-slate-900">${r.qPost[q.id]}</span>
+                            </td>
+                        `).join('')}
+                        <td class="px-3 py-2.5 text-center">
+                            <span class="px-2 py-0.5 text-[10px] rounded ${r.text1 || r.text2 ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-400'}">${hasText}</span>
+                        </td>
+                        <td class="px-3 py-2.5 text-center">
+                            <button onclick="deleteResponse(${index})" class="text-red-500 hover:text-red-700 font-medium">削除</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function deleteResponse(index) {
+            if (confirm('この回答データを削除しますか？')) {
+                responses.splice(index, 1);
+                saveData();
+                updateSchoolFilterOptions();
+                renderDataList();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('すべての回答データを消去してもよろしいですか？')) {
+                responses = [];
+                saveData();
+                updateSchoolFilterOptions();
+                renderDataList();
+            }
+        }
+
+        // Render Free Text Comments View
+        function renderComments() {
+            const query = (document.getElementById('search-comments').value || '').toLowerCase();
+            const list1 = document.getElementById('comments-list-1');
+            const list2 = document.getElementById('comments-list-2');
+
+            const filtered = responses.filter(r => {
+                return (r.text1 && r.text1.toLowerCase().includes(query)) ||
+                       (r.text2 && r.text2.toLowerCase().includes(query)) ||
+                       (r.school && r.school.toLowerCase().includes(query));
+            });
+
+            const text1Items = filtered.filter(r => r.text1);
+            const text2Items = filtered.filter(r => r.text2);
+
+            document.getElementById('text1-count-badge').innerText = `${text1Items.length}件`;
+            document.getElementById('text2-count-badge').innerText = `${text2Items.length}件`;
+
+            const cards1 = text1Items.map(r => `
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 hover:border-emerald-300 transition">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">${escapeHtml(r.school)}</span>
+                        <span class="text-slate-500 font-medium">${r.topics.join(', ')}</span>
+                    </div>
+                    <p class="text-xs text-slate-800 leading-relaxed font-normal">${escapeHtml(r.text1)}</p>
+                </div>
+            `).join('');
+
+            const cards2 = text2Items.map(r => `
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2 hover:border-amber-300 transition">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">${escapeHtml(r.school)}</span>
+                        <span class="text-slate-500 font-medium">${r.topics.join(', ')}</span>
+                    </div>
+                    <p class="text-xs text-slate-800 leading-relaxed font-normal">${escapeHtml(r.text2)}</p>
+                </div>
+            `).join('');
+
+            list1.innerHTML = cards1 || `<p class="text-xs text-slate-400 text-center py-6">該当する回答はありません</p>`;
+            list2.innerHTML = cards2 || `<p class="text-xs text-slate-400 text-center py-6">該当する回答はありません</p>`;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-5 right-5 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-lg shadow-lg z-50 transition opacity-100';
+            toast.innerText = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        function exportCSV() {
+            if (responses.length === 0) {
+                alert('出力するデータがありません。');
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            
+            // CSV Header
+            const headers = [
+                "ID", "所属校名", "研修内容",
+                ...QUESTIONS.map(q => `Q${q.id}_事前`),
+                ...QUESTIONS.map(q => `Q${q.id}_事後`),
+                "分かったこと・心に残ったこと", "不安・確認したいこと"
+            ];
+            csvContent += headers.map(h => `"${h}"`).join(",") + "\n";
+
+            // CSV Rows
+            responses.forEach(r => {
+                const row = [
+                    r.id,
+                    (r.school || '').replace(/"/g, '""'),
+                    r.topics.join(';'),
+                    ...QUESTIONS.map(q => r.qPre[q.id]),
+                    ...QUESTIONS.map(q => r.qPost[q.id]),
+                    (r.text1 || '').replace(/"/g, '""'),
+                    (r.text2 || '').replace(/"/g, '""')
+                ];
+                csvContent += row.map(v => `"${v}"`).join(",") + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `緊急時対応研修_アンケート集計結果_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
